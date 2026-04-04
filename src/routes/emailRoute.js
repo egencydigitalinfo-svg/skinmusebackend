@@ -19,7 +19,7 @@ router.post("/contact", async (req, res) => {
       secure: false, // TLS
       auth: {
         user: "info@skinmuse.pk",
-        pass: process.env.EMAIL_PASS || "Sheetno1@", // use .env
+        pass: process.env.EMAIL_PASS || "Sheetno2@", // use .env
       },
     });
 
