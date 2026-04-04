@@ -8,12 +8,15 @@ import {
   deleteProduct,
   reviewOrder,
   deleteReview,
+  getShopData,
 } from "../controllers/productController.js";
 
 import upload from "../middlewares/upload.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+
+router.get("/shop", getShopData);
 
 router.get("/", getProducts);
 

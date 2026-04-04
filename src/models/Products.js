@@ -13,7 +13,9 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     discount: { type: Number},
     description: String,
-    category: String,
+    // category: String,
+    category: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
+    subcategory: { type: mongoose.Schema.Types.ObjectId, ref: "Category" }, // optional
     productType: {
       type: String,
       enum: ["makeup", "skincare", "haircare", "bath&body", "other"],

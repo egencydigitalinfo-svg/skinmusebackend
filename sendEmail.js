@@ -8,7 +8,7 @@ const sendEmail = async ({ to, subject, html, replyTo }) => {
       secure: true, // SSL
       auth: {
         user: process.env.EMAIL_USER || "sales@skinmuse.pk",
-        pass: process.env.EMAIL_PASS || "Sheetno1@", // use .env
+        pass: process.env.EMAIL_PASS || "Sheetno2@", // use .env
       },
     });
 
