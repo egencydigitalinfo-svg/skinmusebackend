@@ -6,7 +6,7 @@ dotenv.config();
 
 const MONGO_URI =
   process.env.MONGO_URI ||
-  "mongodb+srv://syedumerhassni:naibtana123@cluster0.8kun6ji.mongodb.net/beauty_store?retryWrites=true&w=majority&appName=Cluster0";
+  "mongodb+srv://syedumerhassni:naibtana123@cluster0.8kun6ji.mongodb.net/beauty_store_testing?retryWrites=true&w=majority&appName=Cluster0";
 
 const migrateImages = async () => {
   try {
