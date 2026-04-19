@@ -6,7 +6,7 @@ import User from "./models/Users.js";
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
-      dbName: 'beauty_store',
+      dbName: 'beauty_store_testing',
     })
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error(err));
