@@ -10,26 +10,33 @@ const categorySchema = new mongoose.Schema(
     title: {
       type: String,
       required: true,
+      trim: true,
     },
 
     slug: {
       type: String,
-      unique: true,
+      required: true,
+      lowercase: true,
+      trim: true,
+      index: true, // ✅ indexing for fast search
     },
 
-    // 🔥 IMPORTANT: Parent Category Reference
+    // 🔥 Parent Category (for subcategories)
     parent_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      default: null, // null = main category
+      default: null,
     },
 
     status: {
       type: Boolean,
       default: true,
-    }
+    },
   },
   { timestamps: true }
 );
+
+// 🔥 COMPOUND UNIQUE INDEX (BEST)
+categorySchema.index({ slug: 1, parent_id: 1 }, { unique: true });
 
 export default mongoose.model("Category", categorySchema);

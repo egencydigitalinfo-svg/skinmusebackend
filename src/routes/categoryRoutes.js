@@ -133,7 +133,10 @@
 
 
 import express from "express";
+import multer from "multer";
+import mongoose from "mongoose";
 import { v2 as cloudinary } from "cloudinary";
+import slugify from "slugify";
 import Category from "../models/Category.js";
 import dotenv from "dotenv";
 import upload from "../middlewares/upload.js";
@@ -151,6 +154,54 @@ cloudinary.config({
 
 
 // ✅ CREATE CATEGORY (MAIN + SUBCATEGORY)
+// router.post(
+//   "/",
+//   protect,
+//   authorizeRoles("admin", "superAdmin"),
+//   upload.single("image"),
+//   async (req, res) => {
+//     try {
+//       if (!req.file) {
+//         return res.status(400).json({ message: "No file uploaded" });
+//       }
+
+//       const stream = cloudinary.uploader.upload_stream(
+//         { folder: "Category" },
+//         async (error, uploadResult) => {
+//           if (error) {
+//             return res.status(500).json({ message: error.message });
+//           }
+
+//           // ✅ Handle parent_id
+//           let parentId = null;
+//           if (req.body.parent_id && req.body.parent_id !== "none") {
+//             parentId = req.body.parent_id;
+//           }
+
+//           const category = new Category({
+//             image: uploadResult.secure_url,
+//             cloudinary_id: uploadResult.public_id, // optional but recommended
+//             title: req.body.name || "",
+//             parent_id: parentId,
+//           });
+
+//           await category.save();
+
+//           res.status(201).json({
+//             message: "Category added successfully",
+//             category,
+//           });
+//         }
+//       );
+
+//       stream.end(req.file.buffer);
+//     } catch (err) {
+//       console.error("❌ Upload Error:", err);
+//       res.status(500).json({ message: "Server error" });
+//     }
+//   }
+// );
+
 router.post(
   "/",
   protect,
@@ -162,43 +213,74 @@ router.post(
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const stream = cloudinary.uploader.upload_stream(
-        { folder: "Category" },
-        async (error, uploadResult) => {
-          if (error) {
-            return res.status(500).json({ message: error.message });
-          }
+      // 🔥 Wrap cloudinary in promise (SAFE)
+      const uploadImage = () =>
+        new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "Category" },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
 
-          // ✅ Handle parent_id
-          let parentId = null;
-          if (req.body.parent_id && req.body.parent_id !== "none") {
-            parentId = req.body.parent_id;
-          }
+          stream.end(req.file.buffer);
+        });
 
-          const category = new Category({
-            image: uploadResult.secure_url,
-            cloudinary_id: uploadResult.public_id, // optional but recommended
-            title: req.body.name || "",
-            parent_id: parentId,
-          });
+      const uploadResult = await uploadImage();
 
-          await category.save();
+      // ✅ parent_id safe handling
+      let parentId = null;
 
-          res.status(201).json({
-            message: "Category added successfully",
-            category,
-          });
-        }
-      );
+      if (
+        req.body.parent_id &&
+        req.body.parent_id !== "none" &&
+        req.body.parent_id !== "null" &&
+        mongoose.Types.ObjectId.isValid(req.body.parent_id)
+      ) {
+        parentId = req.body.parent_id;
+      }
 
-      stream.end(req.file.buffer);
+      // ✅ UNIQUE SLUG GENERATOR (IMPORTANT FIX)
+      const baseSlug = slugify(req.body.name || "", {
+        lower: true,
+        strict: true,
+      });
+
+      let slug = baseSlug;
+      let counter = 1;
+
+      while (
+        await Category.findOne({
+          slug,
+          parent_id: parentId,
+        })
+      ) {
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+
+      // ✅ CREATE CATEGORY
+      const category = new Category({
+        image: uploadResult.secure_url,
+        cloudinary_id: uploadResult.public_id,
+        title: req.body.name || "",
+        slug,
+        parent_id: parentId,
+      });
+
+      await category.save();
+
+      return res.status(201).json({
+        message: "Category added successfully",
+        category,
+      });
     } catch (err) {
-      console.error("❌ Upload Error:", err);
-      res.status(500).json({ message: "Server error" });
+      console.error("❌ Save Error:", err);
+      return res.status(500).json({ message: err.message });
     }
   }
 );
-
 
 // ✅ GET ALL CATEGORIES
 router.get("/", async (req, res) => {
