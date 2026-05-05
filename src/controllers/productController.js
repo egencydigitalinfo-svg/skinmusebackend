@@ -223,8 +223,8 @@ export const addProduct = async (req, res) => {
 
     // 🔹 Populate subcategory (and optionally category) for response
     const populatedProduct = await Product.findById(newProduct._id)
-      .populate("subcategory", "name") // include subcategory name
-      .populate("category", "name");   // include category name if you want
+      .populate("subcategory", "title") // include subcategory title
+      .populate("category", "title");   // include category title
 
     // Update brand discount
     await updateBrandDiscountFromProducts(populatedProduct.brandId);
@@ -420,8 +420,8 @@ export const updateProduct = async (req, res) => {
 
     // Populate category & subcategory for response
     await updatedProduct.populate([
-      { path: "category", select: "name" },
-      { path: "subcategory", select: "name" },
+      { path: "category", select: "title" },
+      { path: "subcategory", select: "title" },
       { path: "brandId", select: "name" },
     ]);
 
@@ -560,19 +560,19 @@ export const getProducts = async (req, res) => {
       return {
         ...p,
 
-        // ✅ CATEGORY (ID + TITLE)
+        // ✅ CATEGORY (ID + NAME)
         category: mainCategoryObj
           ? {
               _id: mainCategoryObj._id,
-              title: mainCategoryObj.title,
+              name: mainCategoryObj.title,
             }
           : null,
 
-        // ✅ SUBCATEGORY (ID + TITLE)
+        // ✅ SUBCATEGORY (ID + NAME)
         subcategory: subcategoryObj
           ? {
               _id: subcategoryObj._id,
-              title: subcategoryObj.title,
+              name: subcategoryObj.title,
             }
           : null,
 
@@ -703,14 +703,14 @@ export const getShopData = async (req, res) => {
         category: mainCategoryObj
           ? {
               _id: mainCategoryObj._id,
-              title: mainCategoryObj.title,
+              name: mainCategoryObj.title,
             }
           : null,
 
         subcategory: subCategoryObj
           ? {
               _id: subCategoryObj._id,
-              title: subCategoryObj.title,
+              name: subCategoryObj.title,
             }
           : null,
 
@@ -826,18 +826,37 @@ export const getShopData = async (req, res) => {
 // ✅ Get highlighted products
 export const getHighlights = async (req, res) => {
   try {
-    const products = await Product.find().populate({
-      path: "brandId",
-      select: "name category discount logo",
-    });
+    const [products, categories] = await Promise.all([
+      Product.find().populate({
+        path: "brandId",
+        select: "name category discount logo",
+      }).lean(),
+      Category.find().lean(),
+    ]);
 
     const productsWithFlags = products.map((p) => {
       const brand = p.brandId;
 
+      // Find main category object
+      const mainCategoryObj = categories.find(
+        (c) => c._id.toString() === (p.category?.toString() || "")
+      );
+
+      // Find subcategory object
+      const subcategoryObj = p.subcategory
+        ? categories.find((c) => c._id.toString() === p.subcategory.toString())
+        : null;
+
       return {
-        ...p._doc,
+        ...p,
+        category: mainCategoryObj
+          ? { _id: mainCategoryObj._id, name: mainCategoryObj.title }
+          : null,
+        subcategory: subcategoryObj
+          ? { _id: subcategoryObj._id, name: subcategoryObj.title }
+          : null,
         brand: brand || null,
-        brandId: brand?._id || null, // ✅ safe
+        brandId: brand?._id || null,
         isFeatured: p.isFeatured,
         isTrending: p.isTrending,
         isHotSale: p.isHotSale,
@@ -857,10 +876,13 @@ export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const product = await Product.findById(id).populate({
-      path: "brandId",
-      select: "name category discount logo",
-    });
+    const product = await Product.findById(id)
+      .populate({
+        path: "brandId",
+        select: "name category discount logo",
+      })
+      .populate("category", "title")
+      .populate("subcategory", "title");
 
     if (!product) return res.status(404).json({ message: "Product not found" });
 
@@ -868,8 +890,14 @@ export const getProductById = async (req, res) => {
 
     res.json({
       ...product._doc,
+      category: product.category
+        ? { _id: product.category._id, name: product.category.title }
+        : null,
+      subcategory: product.subcategory
+        ? { _id: product.subcategory._id, name: product.subcategory.title }
+        : null,
       brand: brand || null,
-      brandId: brand?._id || null, // ✅ safe
+      brandId: brand?._id || null,
       isFeatured: product.isFeatured,
       isTrending: product.isTrending,
       isHotSale: product.isHotSale,
