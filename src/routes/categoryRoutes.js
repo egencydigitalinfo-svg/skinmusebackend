@@ -209,6 +209,25 @@ router.post(
   upload.single("image"),
   async (req, res) => {
     try {
+      // ✅ parent_id safe handling
+      let parentId = null;
+
+      if (
+        req.body.parent_id &&
+        req.body.parent_id !== "none" &&
+        req.body.parent_id !== "null" &&
+        mongoose.Types.ObjectId.isValid(req.body.parent_id)
+      ) {
+        parentId = req.body.parent_id;
+      }
+
+      // ✅ IMAGE ONLY FOR MAIN CATEGORIES (NO SUBCATEGORIES)
+      if (parentId) {
+        return res.status(400).json({ 
+          message: "Subcategories cannot have images. Images are only allowed for main categories." 
+        });
+      }
+
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
@@ -228,18 +247,6 @@ router.post(
         });
 
       const uploadResult = await uploadImage();
-
-      // ✅ parent_id safe handling
-      let parentId = null;
-
-      if (
-        req.body.parent_id &&
-        req.body.parent_id !== "none" &&
-        req.body.parent_id !== "null" &&
-        mongoose.Types.ObjectId.isValid(req.body.parent_id)
-      ) {
-        parentId = req.body.parent_id;
-      }
 
       // ✅ UNIQUE SLUG GENERATOR (IMPORTANT FIX)
       const baseSlug = slugify(req.body.name || "", {
@@ -360,6 +367,13 @@ router.put(
 
       if (!category) {
         return res.status(404).json({ message: "Category not found" });
+      }
+
+      // ✅ Check if trying to convert to subcategory
+      if (req.body.parent_id && req.body.parent_id !== "none") {
+        return res.status(400).json({ 
+          message: "Cannot convert main category to subcategory. Subcategories cannot have images." 
+        });
       }
 
       // ✅ Update Image
