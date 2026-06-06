@@ -4,7 +4,13 @@ const categorySchema = new mongoose.Schema(
   {
     image: {
       type: String,
-      required: true,
+      required: false, // ✅ Optional for subcategories
+      default: "",
+    },
+
+    cloudinary_id: {
+      type: String,
+      default: null,
     },
 
     title: {

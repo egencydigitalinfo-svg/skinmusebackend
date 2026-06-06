@@ -221,32 +221,37 @@ router.post(
         parentId = req.body.parent_id;
       }
 
-      // ✅ IMAGE ONLY FOR MAIN CATEGORIES (NO SUBCATEGORIES)
-      if (parentId) {
+      // ✅ VALIDATION: Main categories REQUIRE image, subcategories must NOT have image
+      if (!parentId && !req.file) {
+        return res.status(400).json({ 
+          message: "Main categories require an image. Images are required for main categories." 
+        });
+      }
+
+      if (parentId && req.file) {
         return res.status(400).json({ 
           message: "Subcategories cannot have images. Images are only allowed for main categories." 
         });
       }
 
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
+      // 🔥 Upload image only for main categories
+      let uploadResult = null;
+      if (!parentId && req.file) {
+        const uploadImage = () =>
+          new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { folder: "Category" },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+              }
+            );
+
+            stream.end(req.file.buffer);
+          });
+
+        uploadResult = await uploadImage();
       }
-
-      // 🔥 Wrap cloudinary in promise (SAFE)
-      const uploadImage = () =>
-        new Promise((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            { folder: "Category" },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          );
-
-          stream.end(req.file.buffer);
-        });
-
-      const uploadResult = await uploadImage();
 
       // ✅ UNIQUE SLUG GENERATOR (IMPORTANT FIX)
       const baseSlug = slugify(req.body.name || "", {
@@ -269,8 +274,8 @@ router.post(
 
       // ✅ CREATE CATEGORY
       const category = new Category({
-        image: uploadResult.secure_url,
-        cloudinary_id: uploadResult.public_id,
+        image: uploadResult?.secure_url || "", // Empty string for subcategories
+        cloudinary_id: uploadResult?.public_id || null, // null for subcategories
         title: req.body.name || "",
         slug,
         parent_id: parentId,
@@ -369,15 +374,22 @@ router.put(
         return res.status(404).json({ message: "Category not found" });
       }
 
-      // ✅ Check if trying to convert to subcategory
-      if (req.body.parent_id && req.body.parent_id !== "none") {
+      // ✅ Determine new parent_id
+      let newParentId = category.parent_id; // default to current
+      if (req.body.parent_id !== undefined) {
+        newParentId =
+          req.body.parent_id === "none" ? null : req.body.parent_id;
+      }
+
+      // ✅ Validation: If converting to subcategory, cannot have image
+      if (newParentId && req.file) {
         return res.status(400).json({ 
-          message: "Cannot convert main category to subcategory. Subcategories cannot have images." 
+          message: "Subcategories cannot have images. Images are only allowed for main categories." 
         });
       }
 
       // ✅ Update Image
-      if (req.file) {
+      if (req.file && !newParentId) { // Only update image if it's a main category
         if (category.cloudinary_id) {
           await cloudinary.uploader.destroy(category.cloudinary_id);
         }
@@ -397,16 +409,25 @@ router.put(
         category.cloudinary_id = uploadResult.public_id;
       }
 
+      // ✅ If converting to subcategory, remove image
+      if (newParentId && !req.body.parent_id) {
+        // Only clear image if explicitly converting (not just updating parent_id on a subcategory)
+        if (!category.parent_id && newParentId) {
+          if (category.cloudinary_id) {
+            await cloudinary.uploader.destroy(category.cloudinary_id);
+          }
+          category.image = "";
+          category.cloudinary_id = null;
+        }
+      }
+
       // ✅ Update Title
       if (req.body.name) {
         category.title = req.body.name;
       }
 
       // ✅ Update parent_id
-      if (req.body.parent_id !== undefined) {
-        category.parent_id =
-          req.body.parent_id === "none" ? null : req.body.parent_id;
-      }
+      category.parent_id = newParentId;
 
       const updatedCategory = await category.save();
 
